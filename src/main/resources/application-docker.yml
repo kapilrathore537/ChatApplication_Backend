@@ -1,0 +1,68 @@
+server:
+  port: ${PORT:8884}
+  
+spring:
+  config:
+    import: optional:configserver:http://${CONFIG_SERVER_HOST:localhost}:${CONFIG_SERVER_PORT:9091}
+  application:
+    name: CHAT-SERVICE
+  datasource:
+     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/e_candidate_chat?createDatabaseIfNotExist=true
+     
+    
+
+#  ACTUATOR CONFIGURATION
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    circuitbreakers:
+      enabled: true
+  
+  
+#  CIRCUIT BREAKER CONFIGURATION  
+resilience4j:
+  circuitbreaker:
+    instances:
+      circuitbreakers:
+        register-health-indicator: true
+        event-consumer-buffer-size: 10
+        failure-rate-threshold: 50
+        minimum-number-of-calls: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        wait-duration-in-open-state: 3s
+        exponential-max-wait-duration-in-open-state: 2
+        sliding-window-size: 10
+        sliding-window-type: COUNT_BASED
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException$NotFound
+          
+#  RETRY PATTERN CONFIGURATION
+  retry:
+    instances:
+      retryInstance:
+        max-attempts: 2
+        wait-duration: 2s
+        ignoreExceptions:
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+        retryExceptions:
+          - java.io.IOException
+          
+          
+#  RATE LIMITER PATTERN CONFIGURATION  
+  ratelimiter:
+    instances:
+      rateLimiter:
+        limit-refresh-period: 4s
+        limit-for-period: 2
+        timeout-duration: 1s
+
+
+
+
+
