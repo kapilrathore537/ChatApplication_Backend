@@ -7,13 +7,14 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToOne;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -40,7 +41,11 @@ public class ChatMessage extends Auditable {
 	@JoinColumn(name = "room_id")
 	private ChatRoom chatRoom;
 	private String senderId;
-	private String messageType;
+
+	@Enumerated(EnumType.STRING)
+	private MessageType messageType;
+
+	private String replyMessageId;
 
 	@ElementCollection(fetch = FetchType.EAGER)
 	@CollectionTable
@@ -53,9 +58,6 @@ public class ChatMessage extends Auditable {
 
 	@Builder.Default
 	private boolean deleted = Boolean.FALSE;
-	
-	@OneToOne
-	private MessageReply reply;
 
 	@ElementCollection(fetch = FetchType.EAGER)
 	@CollectionTable(name = "message_seen_participants", joinColumns = @JoinColumn(name = "message_id"))

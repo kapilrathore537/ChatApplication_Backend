@@ -1,7 +1,6 @@
 package com.chat.service.impl;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -17,17 +16,20 @@ import org.springframework.stereotype.Service;
 import com.chat.model.ChatMessage;
 import com.chat.model.ChatRoom;
 import com.chat.model.LastSeen;
+import com.chat.model.MessageType;
 import com.chat.model.RoomType;
 import com.chat.payloads.request.MessageRequest;
 import com.chat.payloads.response.AgencyChatUsers;
 import com.chat.payloads.response.ApiResponse;
 import com.chat.payloads.response.ChatRoomResponse;
+import com.chat.payloads.response.MessageReply;
 import com.chat.payloads.response.MessageResponse;
 import com.chat.repositories.ChatMessageRepository;
 import com.chat.repositories.ChatRoomRepository;
 import com.chat.repositories.LastSeenRepository;
 import com.chat.service.IChatRoomService;
 
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -54,19 +56,15 @@ public class ChatRoomServiceImpl implements IChatRoomService {
 		// fetch participant id from chatroom
 		chatRoom.getParticipants().removeIf(obj -> obj.equals(senderId));
 
-		List<ChatMessage> res = chatRoom.getMessageList().stream()
+		List<ChatMessage> res = chatRoom.getMessageList().parallelStream().filter(obj -> !obj.isDeleted())
 				.sorted(Comparator.comparing(ChatMessage::getCreatedDate).reversed()).collect(Collectors.toList());
 		Map<LocalDate, List<MessageResponse>> collect = res.stream().collect(Collectors.groupingBy(
 				message -> message.getCreatedDate().toLocalDate(), // Group by date
 				Collectors.mapping(
 						message -> messageToMessageResponse(message, senderId, chatRoom.getParticipants().get(0)),
 						Collectors.collectingAndThen(Collectors.toList(),
-								list -> list.stream().sorted(Comparator.comparing(MessageResponse::getCreatedDate)) // Sort
-																													// MessageResponse
-																													// by
-										// createdDate
+								list -> list.stream().sorted(Comparator.comparing(MessageResponse::getCreatedDate))
 										.collect(Collectors.toList())))));
-
 		// check user online
 		return ChatRoomResponse.builder().roomId(chatRoom.getRoomId()).roomName(chatRoom.getRoomName())
 				.roomType(chatRoom.getRoomType()).messageList(collect)
@@ -75,17 +73,27 @@ public class ChatRoomServiceImpl implements IChatRoomService {
 	}
 
 	private MessageResponse messageToMessageResponse(ChatMessage chatMessage, String senderId, String participantId) {
-		return MessageResponse.builder().messageId(chatMessage.getMessageId()).senderId(chatMessage.getSenderId())
-				.localTime(chatMessage.getCreatedDate().toLocalTime()).content(chatMessage.getContent())
-				.attachments(chatMessage.getAttachments())
-//				.isSeen(chatMessage.getChatRoom().getRoomType().equals(RoomType.ONE_TO_ONE)
-//						? chatMessage.getSenderId().equals(senderId)
-//								&& chatMessage.getParticipants().contains(participantId)
-//						: false)
+		MessageResponse messageResponse = MessageResponse.builder().messageId(chatMessage.getMessageId())
+				.senderId(chatMessage.getSenderId()).localTime(chatMessage.getCreatedDate().toLocalTime())
+				.content(chatMessage.getContent()).attachments(chatMessage.getAttachments())
 				.isSeen(checkIseenOrNot(chatMessage, senderId, participantId)).createdDate(chatMessage.getCreatedDate())
-				.isRecieved(chatMessage.getIsRecieved()).build();
+				.isRecieved(chatMessage.getIsRecieved()).messageType(chatMessage.getMessageType()).build();
+
+		if (chatMessage.getMessageType().equals(MessageType.REPLY)) {
+			// fetching reply message
+			Optional<ChatMessage> message = messageRepository.findById(chatMessage.getReplyMessageId());
+			if (message.isPresent()) {
+				MessageReply messageReply = MessageReply.builder()
+						.content(message.get().getContent().length() > 70 ? message.get().getContent().substring(0, 70)
+								: message.get().getContent())
+						.messageId(message.get().getMessageId()).build();
+				messageResponse.setMessageReply(messageReply);
+			}
+		}
+		return messageResponse;
 	}
 
+	// ensuring the sender is seen message or not
 	public Boolean checkIseenOrNot(ChatMessage chatMessage, String senderId, String participantId) {
 
 		// if receiver seen message
@@ -124,31 +132,6 @@ public class ChatRoomServiceImpl implements IChatRoomService {
 		}).toList();
 	}
 
-	@Override
-	public ResponseEntity<ApiResponse> saveMessage(MessageRequest messageRequest) {
-
-		ChatRoom room = getChatRoom(messageRequest.getRoomId());
-					
-
-		ChatMessage message = ChatMessage.builder().content(messageRequest.getContent())
-				.attachments(messageRequest.getAttachments()).chatRoom(room).build();
-		message.setCreatedDate(LocalDateTime.now());
-		message.setUpdatedDate(LocalDateTime.now());
-		message.setSenderId(messageRequest.getSenderId());
-		message.setIsRecieved(false);
-
-		ChatMessage save = messageRepository.save(message);
-		room.getMessageList().add(save);
-		chatRoomRepository.save(room);
-		Map<String, Object> map = new HashMap<>();
-
-		map.put("message", save);
-		map.put("roomId", room.getRoomId());
-		map.put("roomType", room.getRoomType());
-		ApiResponse response = ApiResponse.builder().message("message saved").data(map).build();
-		return new ResponseEntity<ApiResponse>(response, HttpStatus.CREATED);
-	}
-
 	private ChatRoom getChatRoom(String roomId) {
 		return chatRoomRepository.findById(roomId).orElseThrow(() -> new RuntimeException("Room Not Found"));
 	}
@@ -158,5 +141,46 @@ public class ChatRoomServiceImpl implements IChatRoomService {
 		ChatRoom chatRoom = getChatRoom(roomId);
 		return chatRoom.getParticipants();
 	}
+
+	@Transactional
+	@Override
+	public ResponseEntity<ApiResponse> saveMessage(MessageRequest messageRequest) {
+	    // Retrieve the chat room without loading all messages
+	    ChatRoom room = chatRoomRepository.findById(messageRequest.getRoomId())
+	                                      .orElseThrow(() -> new IllegalArgumentException("Invalid room ID"));
+
+	    // Create a new ChatMessage entity
+	    ChatMessage message = ChatMessage.builder()
+	                                     .content(messageRequest.getContent())
+	                                     .attachments(messageRequest.getAttachments())
+	                                     .chatRoom(room)
+	                                     .senderId(messageRequest.getSenderId())
+	                                     .isRecieved(false)
+	                                     .messageType(messageRequest.getMessageType())
+	                                     .replyMessageId(messageRequest.getMessageId())
+	                                     .build();
+
+	    // Save the message
+	    messageRepository.save(message);
+
+	    // Optionally update the room's last message or message count if needed
+	    // room.setLastMessage(message); // Example if you have a lastMessage field
+	    // chatRoomRepository.save(room);
+
+	    // Build the response map
+	    Map<String, Object> map = new HashMap<>();
+	    map.put("message", message);
+	    map.put("roomId", room.getRoomId());
+	    map.put("roomType", room.getRoomType());
+
+	    // Construct the API response
+	    ApiResponse response = ApiResponse.builder()
+	                                      .message("Message saved successfully")
+	                                      .data(map)
+	                                      .build();
+
+	    return new ResponseEntity<>(response, HttpStatus.CREATED);
+	}
+
 
 }

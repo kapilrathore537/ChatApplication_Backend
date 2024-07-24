@@ -4,7 +4,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -38,12 +37,6 @@ public class ChatController {
 		return chatRoomService.getAllMessages(senderId, roomId);
 	}
 
-//	// for group chatting
-//	@PostMapping(value = "/createGroupRoom")
-//	public ResponseEntity<ApiResponse> createGroupChatRoom(@RequestBody RoomRequest roomRequest) {
-//		return chatService.createGroupChatRoom(roomRequest);
-//	}
-
 	// add new user to existing group
 	@PostMapping(value = "/addGroupUser")
 	public ResponseEntity<ApiResponse> addUserToGroupChatRoom(@RequestBody RoomRequest roomReques) {
@@ -53,12 +46,6 @@ public class ChatController {
 	@GetMapping("/getChatUsers")
 	public ResponseEntity<?> getChatUsers(@RequestParam("userId") String userId) {
 		return chatService.getAllChatUsers(userId);
-	}
-
-	@PutMapping("/seenMessages")
-	public ResponseEntity<?> seenAllUnseenMessages(@RequestParam(value = "recipientId",required = false) String recipientId,
-			@RequestParam String roomId,@RequestParam("senderId") String senderId) {
-		return chatService.seenAllUnseenMessages(recipientId, roomId,senderId);
 	}
 
 }

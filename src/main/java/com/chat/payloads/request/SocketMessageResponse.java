@@ -3,6 +3,7 @@ package com.chat.payloads.request;
 import java.util.List;
 
 import com.chat.model.RoomType;
+import com.chat.payloads.response.MessageReply;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,6 +19,7 @@ public class SocketMessageResponse {
 	private String localTime;
 	private RoomType roomType;
 	private String createdDate;
+	private MessageReply messageReply;
 
 	public SocketMessageResponse(String senderId, String messageId, String roomId, String content,
 			List<String> attachments, String localTime) {

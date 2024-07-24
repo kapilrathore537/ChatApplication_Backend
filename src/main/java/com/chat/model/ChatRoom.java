@@ -34,7 +34,7 @@ public class ChatRoom extends Auditable {
 	private String roomId;
 	private String roomName;
 
-	@OneToMany(mappedBy = "chatRoom", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+	@OneToMany(mappedBy = "chatRoom", cascade = CascadeType.ALL)
 	private List<ChatMessage> messageList = new ArrayList<>();
 
 	@Enumerated(EnumType.STRING)

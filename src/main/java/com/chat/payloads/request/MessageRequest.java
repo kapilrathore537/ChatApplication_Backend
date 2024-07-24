@@ -2,6 +2,8 @@ package com.chat.payloads.request;
 
 import java.util.List;
 
+import com.chat.model.MessageType;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,5 +20,7 @@ public class MessageRequest {
 //	private String recipientId;
 	private String content;
 	private List<String> attachments;
+	private MessageType messageType;
+	private String messageId;
 	// private List<String> participants= new ArrayList<>();// List of user IDs
 }
